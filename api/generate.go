@@ -92,7 +92,7 @@ func Generate(cfg *config.Config, option ...Option) error {
 	}
 
 	if !cfg.SkipValidation {
-		if err := validate(cfg); err != nil {
+		if err := Validate(cfg); err != nil {
 			return errors.Wrap(err, "validation failed")
 		}
 	}
@@ -100,7 +100,7 @@ func Generate(cfg *config.Config, option ...Option) error {
 	return nil
 }
 
-func validate(cfg *config.Config) error {
+func Validate(cfg *config.Config) error {
 	roots := []string{cfg.Exec.ImportPath()}
 	if cfg.Model.IsDefined() {
 		roots = append(roots, cfg.Model.ImportPath())
