@@ -27,6 +27,52 @@ func Generate(cfg *config.Config, option ...Option) error {
 		plugins = append([]plugin.Plugin{federation.New()}, plugins...)
 	}
 
+	if err := mutateConfig(cfg, option...); err != nil {
+		return errors.Wrap(err, "mutating config failed")
+	}
+
+	// Merge again now that the generated models have been injected into the typemap
+	data, err := codegen.BuildData(cfg)
+	if err != nil {
+		return errors.Wrap(err, "merging type systems failed")
+	}
+
+	if err = codegen.GenerateCode(data); err != nil {
+		return errors.Wrap(err, "generating core failed")
+	}
+
+	for _, p := range plugins {
+		if mut, ok := p.(plugin.CodeGenerator); ok {
+			err := mut.GenerateCode(data)
+			if err != nil {
+				return errors.Wrap(err, p.Name())
+			}
+		}
+	}
+
+	if err = codegen.GenerateCode(data); err != nil {
+		return errors.Wrap(err, "generating core failed")
+	}
+
+	if !cfg.SkipValidation {
+		if err := Validate(cfg); err != nil {
+			return errors.Wrap(err, "validation failed")
+		}
+	}
+
+	return nil
+}
+
+func mutateConfig(cfg *config.Config, option ...Option) error {
+	plugins := []plugin.Plugin{}
+	if cfg.Model.IsDefined() {
+		plugins = append(plugins, modelgen.New())
+	}
+	plugins = append(plugins, resolvergen.New())
+	if cfg.Federation.IsDefined() {
+		plugins = append([]plugin.Plugin{federation.New()}, plugins...)
+	}
+
 	for _, o := range option {
 		o(cfg, &plugins)
 	}
@@ -68,39 +114,24 @@ func Generate(cfg *config.Config, option ...Option) error {
 			}
 		}
 	}
-	// Merge again now that the generated models have been injected into the typemap
-	data, err := codegen.BuildData(cfg)
-	if err != nil {
-		return errors.Wrap(err, "merging type systems failed")
-	}
-
-	if err = codegen.GenerateCode(data); err != nil {
-		return errors.Wrap(err, "generating core failed")
-	}
-
-	for _, p := range plugins {
-		if mut, ok := p.(plugin.CodeGenerator); ok {
-			err := mut.GenerateCode(data)
-			if err != nil {
-				return errors.Wrap(err, p.Name())
-			}
-		}
-	}
-
-	if err = codegen.GenerateCode(data); err != nil {
-		return errors.Wrap(err, "generating core failed")
-	}
-
-	if !cfg.SkipValidation {
-		if err := Validate(cfg); err != nil {
-			return errors.Wrap(err, "validation failed")
-		}
-	}
 
 	return nil
 }
 
 func Validate(cfg *config.Config) error {
+	plugins := []plugin.Plugin{}
+	if cfg.Model.IsDefined() {
+		plugins = append(plugins, modelgen.New())
+	}
+	plugins = append(plugins, resolvergen.New())
+	if cfg.Federation.IsDefined() {
+		plugins = append([]plugin.Plugin{federation.New()}, plugins...)
+	}
+
+	if err := mutateConfig(cfg, []Option{}...); err != nil {
+		return errors.Wrap(err, "mutating config failed")
+	}
+
 	roots := []string{cfg.Exec.ImportPath()}
 	if cfg.Model.IsDefined() {
 		roots = append(roots, cfg.Model.ImportPath())
