@@ -36,6 +36,7 @@ func Execute() {
 		genCmd,
 		initCmd,
 		versionCmd,
+		validateCmd,
 	}
 
 	if err := app.Run(os.Args); err != nil {
